@@ -1,5 +1,7 @@
 import { heroStats } from "./landing-data";
 
+const googleAuthUrl = `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"}/api/v1/auth/google`;
+
 export function HeroSection() {
   return (
     <section className="relative overflow-hidden px-6 pb-14 pt-8 lg:px-10 lg:pb-18 lg:pt-24 lg:mt-10 lg:mb-12">
@@ -23,10 +25,10 @@ export function HeroSection() {
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <a
                 data-cursor="interactive"
-                href="#cta"
+                href={googleAuthUrl}
                 className="interactive-button inline-flex items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-orange-400"
               >
-                Get started
+                Start practicing
               </a>
               <a
                 data-cursor="interactive"

@@ -26,6 +26,17 @@ export const createApp = () => {
 
   app.use("/api/v1", apiRouter);
 
+  app.use((error: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error(error);
+
+    res.status(500).json({
+      success: false,
+      error: {
+        code: "INTERNAL_SERVER_ERROR",
+        message: "Something went wrong on the server.",
+      },
+    });
+  });
+
   return app;
 };
-
