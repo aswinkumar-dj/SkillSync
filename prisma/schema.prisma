@@ -1,0 +1,369 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DELETED
+}
+
+enum ExperienceLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum MatchRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELLED
+  EXPIRED
+}
+
+enum MatchStatus {
+  ACTIVE
+  BLOCKED
+  CLOSED
+}
+
+enum ChatMessageType {
+  TEXT
+  SYSTEM
+}
+
+enum NotificationType {
+  MATCH_REQUEST_RECEIVED
+  MATCH_REQUEST_ACCEPTED
+  MATCH_REQUEST_DECLINED
+  CHAT_MESSAGE
+  SESSION_SCHEDULED
+  SESSION_UPDATED
+  SESSION_REMINDER
+  REPORT_UPDATE
+}
+
+enum SessionStatus {
+  SCHEDULED
+  ONGOING
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum SessionParticipantRole {
+  INTERVIEWER
+  CANDIDATE
+  PEER
+}
+
+enum ReportCategory {
+  HARASSMENT
+  SPAM
+  NO_SHOW
+  INAPPROPRIATE_BEHAVIOR
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
+enum AdminRole {
+  MODERATOR
+  ADMIN
+}
+
+model User {
+  id                   String                @id @default(uuid())
+  googleId             String                @unique
+  email                String                @unique
+  name                 String
+  avatarUrl            String?
+  bio                  String?
+  yearsOfExperience    Int?
+  targetRole           String?
+  preferredLanguage    String?
+  timezone             String?
+  githubUrl            String?
+  linkedinUrl          String?
+  isProfileComplete    Boolean               @default(false)
+  isDiscoverable       Boolean               @default(true)
+  status               UserStatus            @default(ACTIVE)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  lastActiveAt         DateTime?
+  skills               UserSkill[]
+  techStackItems       UserTechStackItem[]
+  interviewTopics      UserInterviewTopic[]
+  availabilitySlots    AvailabilitySlot[]
+  sentMatchRequests    MatchRequest[]        @relation("sent_requests")
+  receivedMatchRequests MatchRequest[]       @relation("received_requests")
+  notifications        Notification[]
+  scheduledSessions    InterviewSession[]    @relation("scheduled_sessions")
+  sessionParticipants  SessionParticipant[]
+  sessionNotes         SessionNote[]
+  feedbackGiven        SessionFeedback[]     @relation("feedback_given")
+  feedbackReceived     SessionFeedback[]     @relation("feedback_received")
+  reportsFiled         UserReport[]          @relation("reports_filed")
+  reportsReceived      UserReport[]          @relation("reports_received")
+  adminProfile         AdminUser?
+  matchesAsUserA       Match[]               @relation("match_user_a")
+  matchesAsUserB       Match[]               @relation("match_user_b")
+}
+
+model Skill {
+  id        String      @id @default(uuid())
+  name      String      @unique
+  category  String?
+  users     UserSkill[]
+  createdAt DateTime    @default(now())
+}
+
+model UserSkill {
+  id        String          @id @default(uuid())
+  userId    String
+  skillId   String
+  level     ExperienceLevel?
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill     Skill           @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skillId])
+  @@index([userId])
+}
+
+model TechStackItem {
+  id        String              @id @default(uuid())
+  name      String              @unique
+  users     UserTechStackItem[]
+  createdAt DateTime            @default(now())
+}
+
+model UserTechStackItem {
+  id              String        @id @default(uuid())
+  userId          String
+  techStackItemId String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  techStackItem   TechStackItem @relation(fields: [techStackItemId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, techStackItemId])
+  @@index([userId])
+}
+
+model InterviewTopic {
+  id        String               @id @default(uuid())
+  name      String               @unique
+  users     UserInterviewTopic[]
+  createdAt DateTime             @default(now())
+}
+
+model UserInterviewTopic {
+  id               String         @id @default(uuid())
+  userId           String
+  interviewTopicId String
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interviewTopic   InterviewTopic @relation(fields: [interviewTopicId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, interviewTopicId])
+  @@index([userId])
+}
+
+model AvailabilitySlot {
+  id          String   @id @default(uuid())
+  userId      String
+  dayOfWeek   Int
+  startMinute Int
+  endMinute   Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, dayOfWeek])
+}
+
+model MatchRequest {
+  id               String             @id @default(uuid())
+  senderId         String
+  receiverId       String
+  message          String?
+  requestedRole    String?
+  requestedTopics  Json?
+  status           MatchRequestStatus @default(PENDING)
+  createdAt        DateTime           @default(now())
+  respondedAt      DateTime?
+  sender           User               @relation("sent_requests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver         User               @relation("received_requests", fields: [receiverId], references: [id], onDelete: Cascade)
+  createdMatch     Match?
+
+  @@index([senderId, status])
+  @@index([receiverId, status])
+}
+
+model Match {
+  id                   String           @id @default(uuid())
+  userAId              String
+  userBId              String
+  createdFromRequestId String           @unique
+  status               MatchStatus      @default(ACTIVE)
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  userA                User             @relation("match_user_a", fields: [userAId], references: [id], onDelete: Cascade)
+  userB                User             @relation("match_user_b", fields: [userBId], references: [id], onDelete: Cascade)
+  createdFromRequest   MatchRequest     @relation(fields: [createdFromRequestId], references: [id], onDelete: Cascade)
+  chatRoom             ChatRoom?
+  sessions             InterviewSession[]
+
+  @@index([userAId, status])
+  @@index([userBId, status])
+}
+
+model ChatRoom {
+  id        String        @id @default(uuid())
+  matchId    String       @unique
+  createdAt  DateTime     @default(now())
+  match      Match        @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  messages   ChatMessage[]
+}
+
+model ChatMessage {
+  id         String          @id @default(uuid())
+  roomId      String
+  senderId    String
+  type        ChatMessageType @default(TEXT)
+  content     String
+  createdAt   DateTime        @default(now())
+  editedAt    DateTime?
+  room        ChatRoom        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, createdAt])
+}
+
+model Notification {
+  id         String           @id @default(uuid())
+  userId     String
+  type       NotificationType
+  title      String
+  body       String
+  data       Json?
+  isRead     Boolean          @default(false)
+  createdAt  DateTime         @default(now())
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+}
+
+model InterviewSession {
+  id                String               @id @default(uuid())
+  matchId           String
+  scheduledByUserId String
+  startsAt          DateTime
+  endsAt            DateTime
+  durationMinutes   Int
+  status            SessionStatus        @default(SCHEDULED)
+  agenda            String?
+  roomCode          String               @unique
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  match             Match                @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  scheduledBy       User                 @relation("scheduled_sessions", fields: [scheduledByUserId], references: [id], onDelete: Restrict)
+  participants      SessionParticipant[]
+  notes             SessionNote[]
+  document          CollaborativeDocument?
+  feedback          SessionFeedback[]
+  reports           UserReport[]
+
+  @@index([matchId, startsAt])
+}
+
+model SessionParticipant {
+  id        String                 @id @default(uuid())
+  sessionId String
+  userId    String
+  role      SessionParticipantRole @default(PEER)
+  joinedAt  DateTime?
+  leftAt    DateTime?
+  session   InterviewSession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user      User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+  @@index([userId])
+}
+
+model SessionNote {
+  id        String           @id @default(uuid())
+  sessionId String
+  userId    String
+  content   String
+  isPrivate Boolean          @default(true)
+  updatedAt DateTime         @updatedAt
+  session   InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+}
+
+model CollaborativeDocument {
+  id              String           @id @default(uuid())
+  sessionId       String           @unique
+  language        String
+  initialContent  String
+  currentSnapshot String
+  version         Int              @default(1)
+  updatedAt       DateTime         @updatedAt
+  session         InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model SessionFeedback {
+  id                String           @id @default(uuid())
+  sessionId         String
+  submittedByUserId String
+  partnerUserId     String
+  ratingPrivate     Int?
+  whatWentWell      String?
+  improvements      String?
+  wouldPracticeAgain Boolean?
+  createdAt         DateTime         @default(now())
+  session           InterviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  submittedBy       User             @relation("feedback_given", fields: [submittedByUserId], references: [id], onDelete: Cascade)
+  partnerUser       User             @relation("feedback_received", fields: [partnerUserId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+}
+
+model UserReport {
+  id             String           @id @default(uuid())
+  reporterUserId String
+  reportedUserId String
+  sessionId      String?
+  category       ReportCategory
+  details        String
+  status         ReportStatus     @default(OPEN)
+  createdAt      DateTime         @default(now())
+  resolvedAt     DateTime?
+  session        InterviewSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  reporter       User             @relation("reports_filed", fields: [reporterUserId], references: [id], onDelete: Cascade)
+  reportedUser   User             @relation("reports_received", fields: [reportedUserId], references: [id], onDelete: Cascade)
+
+  @@index([reportedUserId, status])
+  @@index([reporterUserId, createdAt])
+}
+
+model AdminUser {
+  id        String    @id @default(uuid())
+  userId     String   @unique
+  role       AdminRole @default(MODERATOR)
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
