@@ -49,9 +49,36 @@ matchingRouter.post("/search", async (req, res, next) => {
       });
     }
 
+    const [pendingRequests, activeMatches] = await Promise.all([
+      prisma.matchRequest.findMany({
+        where: {
+          status: "PENDING",
+          OR: [{ senderId: currentUser.id }, { receiverId: currentUser.id }],
+        },
+        select: { senderId: true, receiverId: true },
+      }),
+      prisma.match.findMany({
+        where: {
+          status: "ACTIVE",
+          OR: [{ userAId: currentUser.id }, { userBId: currentUser.id }],
+        },
+        select: { userAId: true, userBId: true },
+      }),
+    ]);
+
+    const excludedUserIds = new Set<string>([currentUser.id]);
+
+    for (const request of pendingRequests) {
+      excludedUserIds.add(request.senderId === currentUser.id ? request.receiverId : request.senderId);
+    }
+
+    for (const match of activeMatches) {
+      excludedUserIds.add(match.userAId === currentUser.id ? match.userBId : match.userAId);
+    }
+
     const candidates = (await prisma.user.findMany({
       where: {
-        id: { not: currentUser.id },
+        id: { notIn: [...excludedUserIds] },
         status: "ACTIVE",
         isDiscoverable: true,
         isProfileComplete: true,

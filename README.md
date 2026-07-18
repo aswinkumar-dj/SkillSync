@@ -33,7 +33,11 @@ SkillSync replaces that fragmented flow with one focused product:
 - dashboard shell
 - profile completeness gate
 - discoverability toggle support
-- deterministic matching foundation
+- deterministic matching + Discover UI
+- match request lifecycle (send / accept / decline / cancel)
+- private match list + detail pages
+- private match-scoped chat (REST + Socket.IO)
+- in-app notifications with unread badges
 - Prisma schema for the full planned platform
 - Neon PostgreSQL migration applied
 
@@ -45,9 +49,11 @@ The current usable slice is:
 - auth foundation
 - onboarding flow
 - dashboard foundation
-- backend profile/meta/matching scaffolding
+- Discover + match requests + private matches
+- private chat + notifications
+- backend profile/meta/matching/request/chat scaffolding
 
-The full interview workflow, match requests, chat, sessions, WebRTC room, notes, feedback, moderation, and admin surfaces are planned in the schema and architecture but are not fully implemented yet.
+Sessions, WebRTC room, notes, feedback, moderation, and admin surfaces are planned in the schema and architecture but are not fully implemented yet.
 
 ## Tech Stack
 
@@ -212,8 +218,18 @@ npx tsx src/server.ts
 - `GET /api/v1/meta/tech-stack`
 - `GET /api/v1/meta/interview-topics`
 
-### Matching
+### Matching / Matches
 - `POST /api/v1/matches/search`
+- `GET /api/v1/matches`
+- `GET /api/v1/matches/:id`
+
+### Match requests
+- `POST /api/v1/match-requests`
+- `GET /api/v1/match-requests/incoming`
+- `GET /api/v1/match-requests/outgoing`
+- `POST /api/v1/match-requests/:id/accept`
+- `POST /api/v1/match-requests/:id/decline`
+- `POST /api/v1/match-requests/:id/cancel`
 
 ## Product Rules Implemented So Far
 
@@ -238,14 +254,10 @@ The visual language currently aims for:
 
 Recommended next implementation sequence:
 1. finish reliable auth/session runtime flow
-2. complete onboarding save flow polish
-3. build discover/matching results UI
-4. build match request lifecycle
-5. build private chat
-6. build session scheduling
-7. build interview room shell
-8. add Gemini-powered ranking explanations
-9. add feedback/reporting/admin flows
+2. build session scheduling
+3. build interview room shell
+4. add Gemini-powered ranking explanations
+5. add feedback/reporting/admin flows
 
 ## Submission Notes
 

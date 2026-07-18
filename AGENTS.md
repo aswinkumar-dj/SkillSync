@@ -84,15 +84,16 @@ Implemented or partially implemented:
 - discoverability support
 - deterministic matching route with transparent overlap reasons
 - authenticated Discover + Matching Results UI
+- match request lifecycle (create, incoming/outgoing, accept/decline/cancel)
+- private match list + detail pages
+- private chat rooms + message history + Socket.IO delivery
+- in-app notification list + unread badge
 - metadata routes for structured profile options
 - Prisma schema for the larger planned product
 - Neon/PostgreSQL-backed persistence setup
 
 ### What is planned but not finished yet
-- match request lifecycle
-- private match detail screen
-- chat
-- notifications / reminders
+- richer notification preferences / email reminders
 - scheduling flow
 - interview session management
 - in-app interview room
@@ -249,6 +250,10 @@ The backend is moving toward module-oriented routing:
   Reference-data endpoints.
 - `apps/api/src/modules/matching/matching.routes.ts`
   Deterministic search foundation.
+- `apps/api/src/modules/match-requests/match-requests.routes.ts`
+  Request create/list/accept/decline/cancel lifecycle.
+- `apps/api/src/modules/matches/matches.routes.ts`
+  Private match list and detail for accepted relationships.
 
 ### Backend behavior already implemented
 - cookie-based auth instead of storing tokens in frontend state
@@ -421,8 +426,37 @@ Phase 2:
 - `GET /api/v1/meta/tech-stack`
 - `GET /api/v1/meta/interview-topics`
 
-### Matching
+### Matching / Matches
 - `POST /api/v1/matches/search`
+- `GET /api/v1/matches`
+- `GET /api/v1/matches/:id`
+
+### Match requests
+- `POST /api/v1/match-requests`
+- `GET /api/v1/match-requests/incoming`
+- `GET /api/v1/match-requests/outgoing`
+- `POST /api/v1/match-requests/:id/accept`
+- `POST /api/v1/match-requests/:id/decline`
+- `POST /api/v1/match-requests/:id/cancel`
+
+### Chat
+- `GET /api/v1/chat/rooms`
+- `GET /api/v1/chat/rooms/match/:matchId` (get-or-create for an active match)
+- `GET /api/v1/chat/rooms/:roomId`
+- `GET /api/v1/chat/rooms/:roomId/messages`
+- `POST /api/v1/chat/rooms/:roomId/messages`
+
+### Notifications
+- `GET /api/v1/notifications`
+- `GET /api/v1/notifications/unread-count`
+- `POST /api/v1/notifications/read-all`
+- `POST /api/v1/notifications/:id/read`
+
+### Socket.IO events
+- auth via session cookie on handshake
+- `chat:join` / `chat:leave` (membership-checked)
+- `chat:message` (server broadcast after REST send)
+- `notification:new` (server push to `user:{id}`)
 
 ## Environment And Service Context
 
@@ -544,6 +578,10 @@ If another model is joining midstream, read these first:
 - `apps/web/src/components/auth/auth-gate.tsx`
 - `apps/web/src/app/onboarding/page.tsx`
 - `apps/web/src/app/dashboard/page.tsx`
+- `apps/web/src/app/chat/page.tsx`
+- `apps/web/src/app/chat/[roomId]/page.tsx`
+- `apps/web/src/app/notifications/page.tsx`
+- `apps/web/src/lib/socket.ts`
 - `apps/web/src/components/landing/*`
 
 ## What To Build Next
@@ -551,66 +589,73 @@ If another model is joining midstream, read these first:
 This section is intentionally explicit.
 
 ### Just completed
-The `Discover + Matching Results` experience is implemented.
+Private chat + notification surfaces for accepted matches.
 
-A signed-in user with a complete profile can now:
-- open `/discover` from the authenticated app shell
-- filter by target role, language, experience, skills, and interview topics
-- search through `POST /api/v1/matches/search`
-- see loading, error, empty, and results states
-- understand deterministic reasons for each candidate score
+A signed-in matched pair can now:
+- get a chat room created on match accept (with lazy get-or-create fallback)
+- list private rooms at `/chat`
+- open a match-scoped conversation at `/chat/:roomId`
+- load message history over REST and send new messages
+- receive live `chat:message` events over authenticated Socket.IO
+- receive in-app notifications for request received, request accepted, and chat messages
+- open `/notifications`, mark one/all read, and see unread badges in the app shell
+- open chat from match detail / match list
+
+Business rules enforced:
+- chat only for members of an ACTIVE match
+- no public feed or group chat
+- partner payloads still do not expose email
+- sockets require a valid session cookie
 
 Current implementation files:
-- `apps/web/src/app/discover/page.tsx`
+- `packages/shared/src/schemas/chat.ts`
+- `packages/shared/src/schemas/notifications.ts`
+- `apps/api/src/modules/chat/chat.routes.ts`
+- `apps/api/src/modules/notifications/notifications.routes.ts`
+- `apps/api/src/lib/notifications.ts`
+- `apps/api/src/sockets/index.ts`
+- `apps/api/src/sockets/io-registry.ts`
+- `apps/api/src/modules/match-requests/match-requests.routes.ts` (room + notification on accept/create)
+- `apps/web/src/app/chat/page.tsx`
+- `apps/web/src/app/chat/[roomId]/page.tsx`
+- `apps/web/src/app/notifications/page.tsx`
+- `apps/web/src/lib/socket.ts`
 - `apps/web/src/components/app-shell/app-shell.tsx`
-- `apps/api/src/modules/matching/matching.routes.ts`
-
-The request CTA is intentionally disabled until the lifecycle below exists.
 
 ### Immediate next product milestone
-Build the `Match Request Lifecycle`.
-
-This turns a relevant discovery result into a private, consent-based relationship and unlocks every downstream workflow: match details, chat, scheduling, and interview sessions.
+Build session scheduling for accepted matches.
 
 ### What the next slice should include
-- create a request with an optional short practice-goal note
-- list incoming and outgoing requests
-- accept, decline, or cancel a pending request
-- create the accepted `Match` relationship exactly once
-- prevent duplicate active requests and self-requests
-- enable the Discover card CTA only after the create endpoint exists
-- show request state clearly in the web app
+- create/list/update interview sessions for a match
+- basic calendar-style availability awareness
+- in-app session reminders via notifications
+- match detail entry into scheduled sessions
 
 ### Concrete routes and files to add
 Expected backend additions:
-- `apps/api/src/modules/match-requests/*`
-- `POST /api/v1/match-requests`
-- `GET /api/v1/match-requests/incoming`
-- `GET /api/v1/match-requests/outgoing`
-- `POST /api/v1/match-requests/:id/accept`
-- `POST /api/v1/match-requests/:id/decline`
-- `POST /api/v1/match-requests/:id/cancel`
+- `apps/api/src/modules/sessions/*`
+- `POST /api/v1/sessions`
+- `GET /api/v1/sessions`
+- `GET /api/v1/sessions/:id`
+- `PATCH /api/v1/sessions/:id`
 
 Expected frontend additions:
-- request composer/modal from Discover result cards
-- incoming/outgoing request surfaces
-- a private match-detail route after acceptance
+- schedule form from match detail
+- upcoming sessions list
+- session detail shell (pre-interview-room)
 
 ### Definition of done for the next milestone
-A complete-profile user can send one request to a candidate, both participants can see its state, and accepting it creates one private match without exposing chat or session features before acceptance.
+Two matched users can propose and confirm practice sessions with times, see them on both sides, and receive basic in-app reminders.
 
 ## Recommended Next Build Order
 
-After the completed Discover milestone, the broader order should be:
+After private chat + notifications, the broader order should be:
 1. fully stabilize auth/session and onboarding save flow in a production-like local run
-2. implement match request lifecycle
-3. implement match detail page
-4. add private chat and notification surfaces
-5. add session scheduling flow
-6. add interview room shell with WebRTC preparation
-7. add notes and feedback flows
-8. add Gemini assistance for ranking/explanations
-9. add reporting/admin completion
+2. add session scheduling flow
+3. add interview room shell with WebRTC preparation
+4. add notes and feedback flows
+5. add Gemini assistance for ranking/explanations
+6. add reporting/admin completion
 
 ## Collaboration Guidance For Another Model
 
@@ -642,7 +687,10 @@ It already has:
 - cookie/session foundations
 - onboarding/profile foundations
 - dashboard foundation
-- metadata and matching scaffolding
+- metadata and deterministic matching
+- Discover + match request lifecycle + private match detail
+- private match-scoped chat with Socket.IO
+- in-app notifications with unread badge support
 - a custom dark landing page aligned to the user's visual direction
 - hackathon-oriented documentation
 - better onboarding validation UX than earlier revisions
@@ -650,12 +698,11 @@ It already has:
 It does not yet have the full end-user workflow.
 
 Biggest remaining product gaps:
-- discover UI
-- request lifecycle
-- chat
-- scheduling
+- session scheduling
 - live interview room
-- notes/feedback/reporting/admin completion
+- notes/feedback
+- reporting/admin completion
+- Gemini ranking assistance
 
 ## Final Reminder
 

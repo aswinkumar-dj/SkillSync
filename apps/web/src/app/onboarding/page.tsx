@@ -1,11 +1,13 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { userProfileSchema } from "@skillsync/shared";
 
 import { AppShell } from "../../components/app-shell/app-shell";
 import { AuthGate, type AuthUser } from "../../components/auth/auth-gate";
+import { useAuth } from "../../components/auth/auth-provider";
 import { ApiError, apiFetch } from "../../lib/api";
 
 type SaveProfileResponse = {
@@ -54,6 +56,8 @@ const fieldLabels: Record<ProfileField, string> = {
 };
 
 function OnboardingForm({ user }: { user: AuthUser }) {
+  const router = useRouter();
+  const { setUser } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -183,7 +187,11 @@ function OnboardingForm({ user }: { user: AuthUser }) {
 
       setFieldErrors({});
       setSuccess(response.data.message);
-      window.location.href = response.data.profile.isProfileComplete ? "/dashboard" : "/onboarding";
+      setUser(response.data.profile);
+
+      if (response.data.profile.isProfileComplete) {
+        router.replace("/dashboard");
+      }
     } catch (submitError) {
       if (submitError instanceof ApiError) {
         const nextErrors = mapValidationErrors(submitError.payload);
