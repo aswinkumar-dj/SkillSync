@@ -82,13 +82,13 @@ Implemented or partially implemented:
 - dashboard shell
 - profile completeness logic
 - discoverability support
-- deterministic matching route foundation
+- deterministic matching route with transparent overlap reasons
+- authenticated Discover + Matching Results UI
 - metadata routes for structured profile options
 - Prisma schema for the larger planned product
 - Neon/PostgreSQL-backed persistence setup
 
 ### What is planned but not finished yet
-- discover / browse UI for candidates
 - match request lifecycle
 - private match detail screen
 - chat
@@ -167,7 +167,7 @@ Core rules:
 - minimal sections and stronger information hierarchy
 - avoid white outlines unless extremely subtle
 - avoid oversized hero typography
-- avoid “AI slop” gradients or generic shiny product marketing
+- avoid AI-slop gradients or generic shiny product marketing
 
 ### Current landing page structure
 The landing page was intentionally simplified after multiple revisions.
@@ -206,6 +206,7 @@ The user explicitly asked to reduce section count and remove unnecessary divider
 - profile save UX should be simple and direct
 - first-pass availability can be seeded rather than fully configurable
 - authenticated pages should feel consistent with landing page styling
+- onboarding should now show field-level validation errors instead of only generic failures
 
 ## Backend Architecture
 
@@ -275,7 +276,7 @@ It should be the first place to add or modify:
 - `packages/shared/src/schemas/matching.ts`
 - `packages/shared/src/constants/roles.ts`
 
-### Important recent change
+### Important recent changes
 Profile schema handling was hardened so blank optional strings do not break saves unnecessarily.
 
 This matters especially for:
@@ -285,6 +286,8 @@ This matters especially for:
 - timezone
 - githubUrl
 - linkedinUrl
+
+URL inputs are now also normalized more gracefully so common values like `github.com/username` can be accepted and converted to `https://github.com/username`.
 
 ## Database / Prisma Context
 
@@ -455,6 +458,7 @@ These are important and should not be rediscovered from scratch.
 4. A Windows / OneDrive / `.next` issue caused production `next build` trouble involving `readlink`.
 5. Because of that, local validation sometimes had to rely on `next dev` instead of `next start`.
 6. `Invoke-WebRequest` was occasionally unreliable for local health probing, while `Invoke-RestMethod` or `curl.exe` gave clearer results.
+7. The onboarding save route previously suffered Prisma transaction timeout errors (`P2028`) and had to be refactored away from a slower interactive transaction style.
 
 ### Current known local URLs
 - web: `http://localhost:3000`
@@ -488,6 +492,7 @@ This section captures the project evolution inside this conversation.
 - onboarding page and dashboard page were rebuilt into a usable authenticated flow
 - profile save path was wired to backend update route
 - profile completeness gating was reinforced
+- onboarding now includes field-level validation styling and messages
 
 ### Backend work
 - session cookie helpers and middleware were introduced
@@ -495,6 +500,7 @@ This section captures the project evolution inside this conversation.
 - metadata and matching foundations were added
 - environment parsing was hardened
 - optional TURN env handling was improved
+- profile save logic was refactored to reduce Prisma transaction timeout risk
 
 ### Save-failure debugging work
 The user encountered multiple save-related failures.
@@ -503,7 +509,10 @@ Observed symptoms during the chat:
 - loading skeleton on onboarding
 - server-side error on save
 - failed fetch on save
+- 400 bad request on save
+- 500 internal server error on save
 - backend process instability
+- Prisma transaction timeout errors during profile update
 
 What was done:
 - verified API health repeatedly
@@ -511,7 +520,9 @@ What was done:
 - hardened optional string handling in profile schema
 - normalized blank form values before sending save payloads
 - improved frontend fetch error messaging when the server cannot be reached
-- restarted local services to ensure latest code was live
+- added field-level validation UX in onboarding
+- refactored the backend profile save path away from a slower interactive transaction approach
+- restarted local services repeatedly to ensure latest code was live
 
 ### Documentation work
 - `README.md` was expanded for hackathon submission use
@@ -535,20 +546,71 @@ If another model is joining midstream, read these first:
 - `apps/web/src/app/dashboard/page.tsx`
 - `apps/web/src/components/landing/*`
 
+## What To Build Next
+
+This section is intentionally explicit.
+
+### Just completed
+The `Discover + Matching Results` experience is implemented.
+
+A signed-in user with a complete profile can now:
+- open `/discover` from the authenticated app shell
+- filter by target role, language, experience, skills, and interview topics
+- search through `POST /api/v1/matches/search`
+- see loading, error, empty, and results states
+- understand deterministic reasons for each candidate score
+
+Current implementation files:
+- `apps/web/src/app/discover/page.tsx`
+- `apps/web/src/components/app-shell/app-shell.tsx`
+- `apps/api/src/modules/matching/matching.routes.ts`
+
+The request CTA is intentionally disabled until the lifecycle below exists.
+
+### Immediate next product milestone
+Build the `Match Request Lifecycle`.
+
+This turns a relevant discovery result into a private, consent-based relationship and unlocks every downstream workflow: match details, chat, scheduling, and interview sessions.
+
+### What the next slice should include
+- create a request with an optional short practice-goal note
+- list incoming and outgoing requests
+- accept, decline, or cancel a pending request
+- create the accepted `Match` relationship exactly once
+- prevent duplicate active requests and self-requests
+- enable the Discover card CTA only after the create endpoint exists
+- show request state clearly in the web app
+
+### Concrete routes and files to add
+Expected backend additions:
+- `apps/api/src/modules/match-requests/*`
+- `POST /api/v1/match-requests`
+- `GET /api/v1/match-requests/incoming`
+- `GET /api/v1/match-requests/outgoing`
+- `POST /api/v1/match-requests/:id/accept`
+- `POST /api/v1/match-requests/:id/decline`
+- `POST /api/v1/match-requests/:id/cancel`
+
+Expected frontend additions:
+- request composer/modal from Discover result cards
+- incoming/outgoing request surfaces
+- a private match-detail route after acceptance
+
+### Definition of done for the next milestone
+A complete-profile user can send one request to a candidate, both participants can see its state, and accepting it creates one private match without exposing chat or session features before acceptance.
+
 ## Recommended Next Build Order
 
-The next slices should build on the current foundation rather than jumping randomly.
-
+After the completed Discover milestone, the broader order should be:
 1. fully stabilize auth/session and onboarding save flow in a production-like local run
-2. build discover page and matching results UI
-3. implement match request lifecycle
-4. implement match detail page
-5. add private chat and notification surfaces
-6. add session scheduling flow
-7. add interview room shell with WebRTC preparation
-8. add notes and feedback flows
-9. add Gemini assistance for ranking/explanations
-10. add reporting/admin completion
+2. implement match request lifecycle
+3. implement match detail page
+4. add private chat and notification surfaces
+5. add session scheduling flow
+6. add interview room shell with WebRTC preparation
+7. add notes and feedback flows
+8. add Gemini assistance for ranking/explanations
+9. add reporting/admin completion
 
 ## Collaboration Guidance For Another Model
 
@@ -566,8 +628,9 @@ When continuing this repo:
 - align major changes with `ARCHITECTURE.md`
 - if touching auth or save flow, verify both running processes actually picked up the code
 - be careful with Windows/OneDrive runtime quirks in `.next` and local process management
+- if touching the save route again, be extra careful about Prisma transaction duration and batching
 
-## Short Status Summary As Of July 17, 2026
+## Short Status Summary As Of July 18, 2026
 
 SkillSync is a strong foundation-stage product build.
 
@@ -580,8 +643,9 @@ It already has:
 - onboarding/profile foundations
 - dashboard foundation
 - metadata and matching scaffolding
-- a custom dark landing page aligned to the user’s visual direction
+- a custom dark landing page aligned to the user's visual direction
 - hackathon-oriented documentation
+- better onboarding validation UX than earlier revisions
 
 It does not yet have the full end-user workflow.
 

@@ -1,4 +1,3 @@
-import type { Prisma } from "@prisma/client";
 import { Router } from "express";
 
 import { userProfileSchema } from "@skillsync/shared";
@@ -81,6 +80,69 @@ const serializeUser = (user: UserWithProfile) => ({
   availability: user.availabilitySlots,
 });
 
+const ensureSkills = async (names: string[]) => {
+  if (names.length === 0) {
+    return [] as Array<{ id: string; name: string }>;
+  }
+
+  await prisma.$transaction(
+    names.map((name) =>
+      prisma.skill.upsert({
+        where: { name },
+        update: {},
+        create: { name },
+      }),
+    ),
+  );
+
+  return prisma.skill.findMany({
+    where: { name: { in: names } },
+    select: { id: true, name: true },
+  });
+};
+
+const ensureTechStackItems = async (names: string[]) => {
+  if (names.length === 0) {
+    return [] as Array<{ id: string; name: string }>;
+  }
+
+  await prisma.$transaction(
+    names.map((name) =>
+      prisma.techStackItem.upsert({
+        where: { name },
+        update: {},
+        create: { name },
+      }),
+    ),
+  );
+
+  return prisma.techStackItem.findMany({
+    where: { name: { in: names } },
+    select: { id: true, name: true },
+  });
+};
+
+const ensureInterviewTopics = async (names: string[]) => {
+  if (names.length === 0) {
+    return [] as Array<{ id: string; name: string }>;
+  }
+
+  await prisma.$transaction(
+    names.map((name) =>
+      prisma.interviewTopic.upsert({
+        where: { name },
+        update: {},
+        create: { name },
+      }),
+    ),
+  );
+
+  return prisma.interviewTopic.findMany({
+    where: { name: { in: names } },
+    select: { id: true, name: true },
+  });
+};
+
 usersRouter.use(requireAuth);
 
 usersRouter.get("/me", async (req, res, next) => {
@@ -133,11 +195,13 @@ usersRouter.patch("/me", async (req, res, next) => {
         success: false,
         error: {
           code: "INVALID_PROFILE",
+          message: "Please correct the highlighted profile fields and try again.",
           details: parsed.error.flatten(),
         },
       });
     }
 
+    const userId = req.authUser!.id;
     const payload = {
       ...parsed.data,
       skills: normalizeItems(parsed.data.skills),
@@ -157,9 +221,15 @@ usersRouter.patch("/me", async (req, res, next) => {
       availabilityCount: payload.availability.length,
     });
 
-    const user = (await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      await tx.user.update({
-        where: { id: req.authUser!.id },
+    const [skills, techStackItems, interviewTopics] = await Promise.all([
+      ensureSkills(payload.skills),
+      ensureTechStackItems(payload.techStack),
+      ensureInterviewTopics(payload.interviewTopics),
+    ]);
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: userId },
         data: {
           name: payload.name,
           bio: payload.bio,
@@ -173,74 +243,50 @@ usersRouter.patch("/me", async (req, res, next) => {
           isProfileComplete,
           lastActiveAt: new Date(),
         },
-      });
+      }),
+      prisma.userSkill.deleteMany({ where: { userId } }),
+      prisma.userTechStackItem.deleteMany({ where: { userId } }),
+      prisma.userInterviewTopic.deleteMany({ where: { userId } }),
+      prisma.availabilitySlot.deleteMany({ where: { userId } }),
+      ...(skills.length > 0
+        ? [
+            prisma.userSkill.createMany({
+              data: skills.map((skill) => ({ userId, skillId: skill.id })),
+            }),
+          ]
+        : []),
+      ...(techStackItems.length > 0
+        ? [
+            prisma.userTechStackItem.createMany({
+              data: techStackItems.map((item) => ({ userId, techStackItemId: item.id })),
+            }),
+          ]
+        : []),
+      ...(interviewTopics.length > 0
+        ? [
+            prisma.userInterviewTopic.createMany({
+              data: interviewTopics.map((topic) => ({ userId, interviewTopicId: topic.id })),
+            }),
+          ]
+        : []),
+      ...(payload.availability.length > 0
+        ? [
+            prisma.availabilitySlot.createMany({
+              data: payload.availability.map((slot) => ({
+                userId,
+                dayOfWeek: slot.dayOfWeek,
+                startMinute: slot.startMinute,
+                endMinute: slot.endMinute,
+                isActive: slot.isActive,
+              })),
+            }),
+          ]
+        : []),
+    ]);
 
-      await tx.userSkill.deleteMany({ where: { userId: req.authUser!.id } });
-      await tx.userTechStackItem.deleteMany({ where: { userId: req.authUser!.id } });
-      await tx.userInterviewTopic.deleteMany({ where: { userId: req.authUser!.id } });
-      await tx.availabilitySlot.deleteMany({ where: { userId: req.authUser!.id } });
-
-      for (const skillName of payload.skills) {
-        const skill = await tx.skill.upsert({
-          where: { name: skillName },
-          update: {},
-          create: { name: skillName },
-        });
-
-        await tx.userSkill.create({
-          data: {
-            userId: req.authUser!.id,
-            skillId: skill.id,
-          },
-        });
-      }
-
-      for (const techName of payload.techStack) {
-        const techStackItem = await tx.techStackItem.upsert({
-          where: { name: techName },
-          update: {},
-          create: { name: techName },
-        });
-
-        await tx.userTechStackItem.create({
-          data: {
-            userId: req.authUser!.id,
-            techStackItemId: techStackItem.id,
-          },
-        });
-      }
-
-      for (const topicName of payload.interviewTopics) {
-        const interviewTopic = await tx.interviewTopic.upsert({
-          where: { name: topicName },
-          update: {},
-          create: { name: topicName },
-        });
-
-        await tx.userInterviewTopic.create({
-          data: {
-            userId: req.authUser!.id,
-            interviewTopicId: interviewTopic.id,
-          },
-        });
-      }
-
-      for (const slot of payload.availability) {
-        await tx.availabilitySlot.create({
-          data: {
-            userId: req.authUser!.id,
-            dayOfWeek: slot.dayOfWeek,
-            startMinute: slot.startMinute,
-            endMinute: slot.endMinute,
-            isActive: slot.isActive,
-          },
-        });
-      }
-
-      return tx.user.findUniqueOrThrow({
-        where: { id: req.authUser!.id },
-        include: createProfileInclude(),
-      });
+    const user = (await prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      include: createProfileInclude(),
     })) as unknown as UserWithProfile;
 
     return sendOk(res, {
@@ -294,4 +340,3 @@ usersRouter.get("/:id", async (req, res, next) => {
     return next(error);
   }
 });
-

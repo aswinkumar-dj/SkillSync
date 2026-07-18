@@ -82,6 +82,22 @@ matchingRouter.post("/search", async (req, res, next) => {
           requestedTopics.has(item.interviewTopic.name.toLowerCase()),
         ).length;
         const score = skillMatches * 2 + topicMatches;
+        const matchReasons = [
+          ...(candidate.targetRole === currentUser.targetRole && candidate.targetRole
+            ? [`Shared target: ${candidate.targetRole}`]
+            : []),
+          ...(candidate.preferredLanguage === currentUser.preferredLanguage && candidate.preferredLanguage
+            ? [`Both practice in ${candidate.preferredLanguage}`]
+            : []),
+          ...candidate.skills
+            .filter((item) => requestedSkills.has(item.skill.name.toLowerCase()))
+            .slice(0, 2)
+            .map((item) => `Shared skill: ${item.skill.name}`),
+          ...candidate.interviewTopics
+            .filter((item) => requestedTopics.has(item.interviewTopic.name.toLowerCase()))
+            .slice(0, 2)
+            .map((item) => `Shared topic: ${item.interviewTopic.name}`),
+        ].slice(0, 3);
 
         return {
           id: candidate.id,
@@ -93,6 +109,7 @@ matchingRouter.post("/search", async (req, res, next) => {
           skills: candidate.skills.map((item) => item.skill.name),
           interviewTopics: candidate.interviewTopics.map((item) => item.interviewTopic.name),
           matchScore: score,
+          matchReasons,
         };
       })
       .sort((left, right) => right.matchScore - left.matchScore);
