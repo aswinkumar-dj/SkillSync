@@ -4,7 +4,7 @@ import { env } from "../config/env";
 
 const sharedCookieOptions = {
   httpOnly: true,
-  sameSite: "lax" as const,
+  sameSite: env.NODE_ENV === "production" ? ("none" as const) : ("lax" as const),
   secure: env.NODE_ENV === "production",
   path: "/",
 };
@@ -30,3 +30,4 @@ export const setOAuthStateCookie = (res: Response, state: string) => {
 export const clearOAuthStateCookie = (res: Response) => {
   res.clearCookie(`${env.SESSION_COOKIE_NAME}_oauth_state`, sharedCookieOptions);
 };
+
