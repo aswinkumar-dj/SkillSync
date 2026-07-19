@@ -709,7 +709,7 @@ WebRTC without TURN will fail for a meaningful percentage of users. TURN is requ
 
 ## 15. Development Order
 
-Recommended implementation sequence:
+implementation sequence:
 
 1. Monorepo setup, shared tooling, CI basics
 2. Prisma schema and PostgreSQL setup
@@ -729,7 +729,7 @@ Recommended implementation sequence:
 16. Admin moderation
 17. Hardening, analytics, performance, accessibility
 
-## 16. MVP Scope Recommendation
+## 16. MVP Scope 
 
 To ship faster, define V1 MVP as:
 - Google login
@@ -751,27 +751,3 @@ Exclude from MVP:
 - complex recommendation history
 - public portfolios beyond GitHub/LinkedIn links
 
-## 17. Key Architectural Decisions To Approve
-
-Please approve or change these before implementation:
-
-1. Monorepo with `apps/web` and `apps/api`
-2. Google OAuth as the only login method
-3. PostgreSQL + Prisma as source of truth
-4. Express backend for REST + Socket.IO
-5. AI used only after deterministic DB filtering
-6. Chat unlocked only after request acceptance
-7. Weekly recurring availability slots in user timezone
-8. Peer-to-peer WebRTC with TURN support
-9. Private-only feedback and moderation data
-10. Two-person interview sessions only in V1
-
-## 18. Recommended Next Step
-
-Before coding, the next best step is to confirm:
-- missing product rules from section 2
-- the 10 architectural decisions from section 17
-- whether you want me to turn this into:
-  - a formal PRD
-  - an ER diagram + API contract doc
-  - or begin implementation after your approval
