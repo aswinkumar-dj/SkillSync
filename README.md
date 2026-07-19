@@ -259,14 +259,8 @@ Recommended next implementation sequence:
 4. add Gemini-powered ranking explanations
 5. add feedback/reporting/admin flows
 
-## Submission Notes
 
-This project is strongest as a hackathon submission when pitched as:
-- a workflow product, not a community product
-- an interview-prep coordination tool, not another chat app
-- a focused developer utility that turns scattered prep into committed practice sessions
-
-## Important Note For Judges / Teammates
+## Important Note
 
 The Prisma schema and architecture already define a much larger product than the currently exposed UI. That is intentional.
 
@@ -274,4 +268,4 @@ The repo contains:
 - implemented foundation code
 - production-minded schema design
 - clear architecture for the next slices
-- a realistic path from landing page to full interview platform
+- a realistic path from landing page to full platform
